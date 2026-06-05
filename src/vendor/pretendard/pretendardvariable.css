@@ -1,0 +1,12 @@
+/*
+Pretendard — Kil Hyung-jin, SIL Open Font License 1.1
+https://github.com/orioncactus/pretendard
+로컬 번들 (오프라인). family 명을 'Pretendard' 로 둬서 popup 의 font-family 와 일치.
+*/
+@font-face {
+	font-family: 'Pretendard';
+	font-weight: 45 920;
+	font-style: normal;
+	font-display: swap;
+	src: url('./PretendardVariable.woff2') format('woff2-variations');
+}

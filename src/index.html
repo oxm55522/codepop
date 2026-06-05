@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="vendor/atom-one-dark.min.css">
+<style>
+  @import url('vendor/pretendard/pretendardvariable.css');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: transparent; overflow: hidden; }
+  body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif; color: #e8e8ea; }
+
+  .popup {
+    background: #1e1e20;
+    border: 1px solid #2c2c2e;
+    border-radius: 14px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 0 0 0.5px rgba(255,255,255,0.04);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid #2c2c2e;
+    background: #232325;
+    flex-shrink: 0;
+    cursor: grab;            /* 드래그 핸들 */
+  }
+  .header:active { cursor: grabbing; }
+  /* 헤더 자식들은 클릭을 헤더로 흘려보내 드래그가 끊기지 않게 */
+  .header > * { pointer-events: none; }
+  .header-left { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #fff; }
+  .icon-badge {
+    width: 22px; height: 22px;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #FF6363 0%, #FF8C42 100%);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+  }
+  .shortcuts { display: flex; gap: 8px; font-size: 11px; color: #7a7a7d; }
+  .kbd {
+    background: #2c2c2e; padding: 2px 6px; border-radius: 4px;
+    font-family: 'SF Mono', Menlo, monospace; font-size: 10px; color: #b0b0b3;
+  }
+
+  .body { flex: 1; overflow-y: auto; padding: 0; }
+
+  /* 코드 섹션 (sticky) ───────────────────── */
+  .code-section {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #131315;
+  }
+  .code-block {
+    background: #131315;
+    border: 0;
+    padding: 10px 0;
+    font-family: 'SF Mono', Menlo, monospace;
+    font-size: 11.5px;
+    line-height: 1.6;
+    color: #c5c5c8;
+    height: var(--code-h, 200px);
+    overflow: auto;
+    position: relative;
+  }
+  .code-block .line {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 12px;
+    padding: 0 14px 0 0;
+    border-left: 2px solid transparent;
+  }
+  .code-block.with-comments .line {
+    grid-template-columns: 32px minmax(0, var(--code-fr, 1fr)) minmax(0, var(--comment-fr, 1fr));
+  }
+  .code-block .line:hover {
+    background: rgba(255,140,66,0.14);
+    border-left-color: rgba(255,140,66,0.55);
+    cursor: pointer;
+  }
+  .code-block .line:hover .ln { color: #ffa55e; font-weight: 600; }
+  .code-block .line:hover .cm { color: #c5c5ca !important; }
+  .code-block .ln { padding-left: 12px; text-align: right; color: #50505a; user-select: none; }
+  .code-block .lc { white-space: pre-wrap; word-break: break-word; min-width: 0; }
+  .code-block .cm {
+    display: none;
+    color: #6a6a6d;
+    font-family: 'Pretendard', -apple-system, sans-serif;
+    font-size: 11px;
+    line-height: 1.55;
+    padding-left: 12px;
+    border-left: 1px solid #2c2c2e;
+    white-space: normal;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+    align-self: center;
+  }
+  .code-block.with-comments .cm { display: block; }
+  .code-block .cm:empty::before { content: '·'; color: #2c2c2e; }
+
+  .code-block .line.auto-highlight {
+    background: rgba(255, 140, 66, 0.07);
+    border-left-color: rgba(255, 140, 66, 0.45);
+  }
+  .code-block .line.auto-highlight .ln { color: #ffa55e; }
+  /* Peek: hover 동기화 (중간 강도) */
+  .code-block .line.peek,
+  .code-block .line.auto-highlight.peek {
+    background: rgba(255, 140, 66, 0.22);
+    border-left-color: rgba(255, 140, 66, 0.7);
+    transition: background 0.1s ease;
+  }
+  .code-block .line.peek .ln,
+  .code-block .line.auto-highlight.peek .ln {
+    color: #ffa55e;
+    font-weight: 600;
+  }
+  .code-block .line.peek .cm { color: #c0c0c5; }
+  .explain code[data-lineref].peek {
+    background: rgba(255, 140, 66, 0.32);
+    border-color: rgba(255, 140, 66, 0.55);
+    color: #ffd0a8;
+    transition: background 0.1s ease;
+  }
+  /* Highlighted: 클릭으로 고정 (가장 진한 강조). 모든 것을 압도 */
+  .code-block .line.highlighted,
+  .code-block .line.auto-highlight.highlighted,
+  .code-block .line.peek.highlighted {
+    background: rgba(255, 140, 66, 0.38) !important;
+    border-left-color: #ff8c42 !important;
+  }
+  .code-block .line.highlighted .ln,
+  .code-block .line.auto-highlight.highlighted .ln,
+  .code-block .line.peek.highlighted .ln {
+    color: #ff8c42 !important;
+    font-weight: 700 !important;
+  }
+  .explain code[data-lineref].highlighted {
+    background: rgba(255, 140, 66, 0.5) !important;
+    border-color: #ff8c42 !important;
+    color: #ffe0c0 !important;
+  }
+  .code-block .lc .hljs { background: transparent; padding: 0; }
+
+  /* 가로 splitter (코드/주석 너비 조절) ─── */
+  .col-splitter {
+    display: none;
+    position: absolute;
+    top: 0;
+    height: var(--code-h, 200px);
+    width: 8px;
+    margin-left: -4px;
+    cursor: col-resize;
+    z-index: 11;
+    background: transparent;
+    transition: background 0.15s;
+  }
+  .col-splitter.active { display: block; }
+  .col-splitter:hover, .col-splitter.dragging { background: rgba(255, 140, 66, 0.25); }
+
+  /* 세로 splitter (코드 영역 높이 조절) ─── */
+  .row-splitter {
+    height: 6px;
+    background: #131315;
+    border-bottom: 1px solid #2c2c2e;
+    cursor: row-resize;
+    user-select: none;
+    position: relative;
+    transition: background 0.15s;
+  }
+  .row-splitter::after {
+    content: '';
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 32px; height: 2px;
+    background: #3a3a3d;
+    border-radius: 1px;
+    transition: background 0.15s;
+  }
+  .row-splitter:hover, .row-splitter.dragging { background: rgba(255, 140, 66, 0.08); }
+  .row-splitter:hover::after, .row-splitter.dragging::after { background: #ff8c42; }
+
+  .content-pad { padding: 16px; }
+
+  .loading-state {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 36px 20px; gap: 16px;
+  }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid #2c2c2e;
+    border-top-color: #ff8c42;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { color: #b0b0b3; font-size: 13px; }
+  .loading-sub { color: #6a6a6d; font-size: 11px; }
+
+  .hidden { display: none !important; }
+
+  .explain { font-size: 13.5px; line-height: 1.65; color: #d8d8db; }
+  .explain h1, .explain h2, .explain h3 {
+    font-size: 11.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: #ff8c42; margin: 14px 0 8px;
+  }
+  .explain h1:first-child, .explain h2:first-child { margin-top: 0; }
+  .explain p { margin-bottom: 10px; }
+  .explain ul, .explain ol { list-style: none; margin-bottom: 10px; padding: 0; }
+  .explain li { padding-left: 16px; position: relative; margin-bottom: 4px; }
+  .explain li::before { content: '•'; position: absolute; left: 4px; color: #ff8c42; }
+  .explain code {
+    background: #131315; border: 1px solid #2c2c2e;
+    padding: 1px 6px; border-radius: 4px;
+    font-family: 'SF Mono', monospace; font-size: 12px; color: #a3e635;
+  }
+  .explain code[data-lineref] {
+    background: rgba(255, 140, 66, 0.12);
+    border-color: rgba(255, 140, 66, 0.3);
+    color: #ffb380;
+    cursor: pointer;
+  }
+  .explain code[data-lineref]:hover { background: rgba(255, 140, 66, 0.22); }
+  .explain strong { color: #fff; }
+  .explain pre { background: #131315; border: 1px solid #2c2c2e; padding: 10px; border-radius: 6px; margin: 8px 0; overflow-x: auto; }
+  .explain pre code { background: none; border: none; padding: 0; color: #c5c5c8; }
+
+  .footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 16px;
+    background: #232325;
+    border-top: 1px solid #2c2c2e;
+    font-size: 11px; color: #7a7a7d;
+    flex-shrink: 0;
+  }
+  .meta { display: flex; gap: 10px; align-items: center; }
+  .dot { color: #3a3a3d; }
+  .source-cache { color: #a3e635; }
+  .source-api { color: #67c5ff; }
+
+  .footer-actions { display: flex; gap: 6px; }
+  .footer-btn {
+    background: transparent;
+    border: 1px solid #2c2c2e;
+    color: #b0b0b3;
+    padding: 4px 10px;
+    border-radius: 5px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .footer-btn:hover { background: #2c2c2e; color: #fff; border-color: #3a3a3d; }
+  .footer-btn:active { transform: scale(0.96); }
+  .footer-btn.success { color: #a3e635; border-color: rgba(163,230,53,0.4); }
+  .footer-btn.dim { opacity: 0.45; }
+  .footer-btn.dim:hover { background: transparent; color: #b0b0b3; border-color: #2c2c2e; }
+  /* 라인 참조 0개일 때 상단 안내 배지 */
+  .no-refs-hint {
+    background: rgba(255, 140, 66, 0.1);
+    border: 1px solid rgba(255, 140, 66, 0.3);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 11.5px;
+    color: #ffa55e;
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
+  /* 언어 토글: 두 박스 중 현재 선택을 명확히 강조 */
+  .footer-btn.lang-toggle {
+    padding: 2px;
+    display: inline-flex;
+    gap: 1px;
+    align-items: center;
+  }
+  .lang-toggle .lang-opt {
+    padding: 2px 8px;
+    border-radius: 3px;
+    color: #6a6a6d;
+    font-size: 10.5px;
+    font-weight: 500;
+    transition: all 0.12s;
+  }
+  .lang-toggle .lang-opt.active {
+    background: #ff8c42;
+    color: #1e1e20;
+    font-weight: 700;
+  }
+  .lang-toggle:hover .lang-opt:not(.active) { color: #fff; }
+</style>
+</head>
+<body>
+  <div class="popup">
+    <div class="header" data-tauri-drag-region>
+      <div class="header-left">
+        <div class="icon-badge">✦</div>
+        <span id="hdr-title">코드 설명</span>
+      </div>
+      <div class="shortcuts">
+        <span><span class="kbd">esc</span> <span id="esc-label">닫기</span></span>
+      </div>
+    </div>
+    <div class="body">
+      <div class="code-section">
+        <div class="code-block" id="code"></div>
+        <div class="col-splitter" id="col-splitter" title="드래그: 코드/주석 너비 조절"></div>
+        <div class="row-splitter" id="row-splitter" title="드래그: 코드 영역 높이 조절"></div>
+      </div>
+      <div class="content-pad">
+        <div class="loading-state hidden" id="loading">
+          <div class="spinner"></div>
+          <div class="loading-text" id="loading-text">✦ Gemini가 분석 중...</div>
+          <div class="loading-sub" id="loading-sub">잠시만요</div>
+        </div>
+        <div class="explain hidden" id="explain"></div>
+      </div>
+    </div>
+    <div class="footer">
+      <div class="meta">
+        <span id="source"></span>
+        <span class="dot">·</span>
+        <span id="elapsed"></span>
+        <span class="dot">·</span>
+        <span id="cost">₩0</span>
+      </div>
+      <div class="footer-actions">
+        <button class="footer-btn lang-toggle" id="lang-btn" title="한국어 ↔ English 전환 (저장됨)">
+          <span class="lang-opt active" data-lang="ko">한국어</span>
+          <span class="lang-opt" data-lang="en">EN</span>
+        </button>
+        <button class="footer-btn success" id="comments-btn" title="코드 옆 라인별 주석 표시">📝 주석</button>
+        <button class="footer-btn" id="copy-btn" title="설명 복사">📋 복사</button>
+        <button class="footer-btn" id="retry-btn" title="캐시 무시하고 다시 분석">🔄 재분석</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="vendor/marked.min.js"></script>
+  <script src="vendor/purify.min.js"></script>
+  <script src="vendor/highlight.min.js"></script>
+  <script>
+    (function () {
+      const $ = (id) => document.getElementById(id);
+      const ESC = { '<':'&lt;', '>':'&gt;', '&':'&amp;', '"':'&quot;', "'":'&#39;' };
+      const escapeHtml = (s) => String(s == null ? '' : s).replace(/[<>&"']/g, c => ESC[c]);
+
+      // ─── i18n: 영어 선택 시 UI 라벨/메시지도 전환 ───
+      let CUR_LANG = 'ko';
+      const I18N = {
+        ko: { title:'코드 설명', esc:'닫기', loadingText:'✦ Gemini가 분석 중...', loadingSub:'잠시만요',
+              notes:'📝 주석', copy:'📋 복사', retry:'🔄 재분석',
+              copied:'✓ 복사됨', nothingToCopy:'복사할 내용 없음', reanalyzeFirst:'🔄 재분석 필요',
+              noRefs:'⚠️ 이 응답엔 라인 번호 참조가 없습니다 — 🔄 재분석을 권장합니다',
+              errHintHtml:'잠시 후 푸터의 <strong style="color:#a3e635;">🔄 재분석</strong> 버튼으로 다시 시도하세요', cost:'₩0' },
+        en: { title:'Code Explain', esc:'close', loadingText:'✦ Analyzing with Gemini...', loadingSub:'Just a moment',
+              notes:'📝 Notes', copy:'📋 Copy', retry:'🔄 Retry',
+              copied:'✓ Copied', nothingToCopy:'Nothing to copy', reanalyzeFirst:'🔄 Re-analyze first',
+              noRefs:'⚠️ No line references in this response — 🔄 Retry recommended',
+              errHintHtml:'Try again using the <strong style="color:#a3e635;">🔄 Retry</strong> button below', cost:'Free' }
+      };
+      const L = () => I18N[CUR_LANG] || I18N.ko;
+      function applyI18n(lang) {
+        if (lang === 'en' || lang === 'ko') CUR_LANG = lang;
+        const t = L();
+        const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+        set('hdr-title', t.title);
+        set('esc-label', t.esc);
+        set('loading-text', t.loadingText);
+        set('loading-sub', t.loadingSub);
+        set('comments-btn', t.notes);
+        set('copy-btn', t.copy);
+        set('retry-btn', t.retry);
+        set('cost', t.cost);
+      }
+
+      const safeSanitize = (html) => {
+        if (typeof DOMPurify !== 'undefined') {
+          return DOMPurify.sanitize(html, {
+            ALLOWED_TAGS: ['p','strong','em','code','pre','ul','ol','li','h1','h2','h3','br','a','hr','blockquote'],
+            ALLOWED_ATTR: ['href']
+          });
+        }
+        return escapeHtml(html);
+      };
+      const safeMarkdown = (md) => {
+        let r;
+        try { r = (typeof marked !== 'undefined') ? marked.parse(md || '') : escapeHtml(md || '').replace(/\n/g, '<br>'); }
+        catch (e) { r = escapeHtml(md || ''); }
+        return safeSanitize(r);
+      };
+
+      function sendMessage(type, extra) {
+        try {
+          // Tauri: 커맨드 직접 invoke (이벤트와 동일한 __TAURI__ 채널 — 확실히 동작)
+          if (window.__TAURI__ && window.__TAURI__.core) {
+            const map = { 'retry': 'retry', 'switch-lang': 'switch_lang', 'close': 'close_popup' };
+            const cmd = map[type];
+            if (cmd) window.__TAURI__.core.invoke(cmd, extra || {});
+            return;
+          }
+          // 폴백 (Hammerspoon WKWebView)
+          const handlers = window.webkit && window.webkit.messageHandlers;
+          if (handlers && handlers.codepop) {
+            handlers.codepop.postMessage(Object.assign({ type: type }, extra || {}));
+          }
+        } catch (e) {}
+      }
+
+      // ─── 코드 렌더 ───
+      function renderCode(code) {
+        const codeEl = $('code');
+        codeEl.innerHTML = '';
+        const codeStr = String(code || '');
+
+        let highlightedHtml;
+        try {
+          if (typeof hljs !== 'undefined') {
+            highlightedHtml = hljs.highlightAuto(codeStr).value;
+          } else {
+            highlightedHtml = escapeHtml(codeStr);
+          }
+        } catch (e) {
+          highlightedHtml = escapeHtml(codeStr);
+        }
+
+        const lines = highlightedHtml.split('\n');
+        if (lines.length && lines[lines.length - 1] === '') lines.pop();
+        lines.forEach((lineHtml, i) => {
+          const row = document.createElement('div');
+          row.className = 'line';
+          row.dataset.line = i + 1;
+          const ln = document.createElement('span');
+          ln.className = 'ln';
+          ln.textContent = i + 1;
+          const lc = document.createElement('span');
+          lc.className = 'lc hljs';
+          lc.innerHTML = lineHtml || ' ';
+          const cm = document.createElement('span');
+          cm.className = 'cm';
+          row.appendChild(ln);
+          row.appendChild(lc);
+          row.appendChild(cm);
+          codeEl.appendChild(row);
+        });
+      }
+
+      // ─── 라인별 주석 파싱 / 적용 ───
+      function parseLineComments(text) {
+        const map = new Map();
+        const sec = String(text || '').match(/#{2,}[^\n]*(?:라인별|Per[ -]?Line)[^\n]*\n([\s\S]*?)(?=\n#{2,}|\n*$)/i);
+        if (!sec) return map;
+        const re = /^\s*[-*]?\s*`?L(\d+)(?:[-–](\d+))?`?\s*[:：]\s*(.+?)\s*$/gm;
+        let m;
+        while ((m = re.exec(sec[1])) !== null) {
+          const from = parseInt(m[1], 10);
+          const to = m[2] ? parseInt(m[2], 10) : from;
+          let c = m[3].replace(/^`|`$/g, '').trim();
+          // 너무 긴 것만 자름 (영어 코멘트가 잘 보이도록 한도 ↑)
+          if (c.length > 120) c = c.slice(0, 117) + '…';
+          for (let n = from; n <= to; n++) if (!map.has(n)) map.set(n, c);
+        }
+        return map;
+      }
+
+      function applyLineComments(map) {
+        const codeEl = $('code');
+        codeEl.querySelectorAll('.line').forEach((row) => {
+          const n = parseInt(row.dataset.line, 10);
+          const cm = row.querySelector('.cm');
+          if (cm) {
+            const t = map.get(n) || '';
+            cm.textContent = t;
+            cm.title = t;   // 호버 툴팁 — 잘려도 전체 보임
+          }
+        });
+        const has = map.size > 0;
+        codeEl.classList.toggle('with-comments', has);
+        $('col-splitter').classList.toggle('active', has);
+        window.__hasComments = has;
+        const btn = $('comments-btn');
+        if (btn) {
+          btn.classList.toggle('success', has);
+          btn.classList.toggle('dim', !has);
+        }
+        // splitter 위치 갱신
+        if (has) requestAnimationFrame(updateColSplitterPos);
+      }
+
+      function hideLineSection() {
+        const explainEl = $('explain');
+        explainEl.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach((h) => {
+          const t = h.textContent || '';
+          if (t.indexOf('🔎') === -1 && t.indexOf('라인별') === -1 && !/per[ -]?line/i.test(t)) return;
+          let next = h.nextElementSibling;
+          while (next && !/^H[1-6]$/.test(next.tagName)) {
+            const cur = next; next = next.nextElementSibling; cur.remove();
+          }
+          h.remove();
+        });
+      }
+
+      // ─── 라인 클릭 시 코드 블록 내부에서만 스크롤 ───
+      function scrollToLine(from, to) {
+        const codeEl = $('code');
+        codeEl.querySelectorAll('.line.highlighted').forEach(n => n.classList.remove('highlighted'));
+        let firstHit = null;
+        for (let n = from; n <= to; n++) {
+          const row = codeEl.querySelector('[data-line="' + n + '"]');
+          if (row) { row.classList.add('highlighted'); if (!firstHit) firstHit = row; }
+        }
+        if (firstHit) {
+          const blockH = codeEl.clientHeight;
+          codeEl.scrollTo({
+            top: Math.max(0, firstHit.offsetTop - (blockH - firstHit.clientHeight) / 2),
+            behavior: 'smooth'
+          });
+        }
+      }
+
+      function enhanceLineRefs() {
+        document.querySelectorAll('#explain code').forEach((el) => {
+          const m = el.textContent.trim().match(/^L(\d+)(?:[-–](\d+))?$/);
+          if (!m) return;
+          const from = parseInt(m[1], 10);
+          const to = m[2] ? parseInt(m[2], 10) : from;
+          el.dataset.lineref = from + '-' + to;
+          el.addEventListener('click', () => scrollToLine(from, to));
+          // 호버 → 코드 라인 peek
+          el.addEventListener('mouseenter', () => peekCodeLines(from, to, true));
+          el.addEventListener('mouseleave', () => peekCodeLines(from, to, false));
+        });
+      }
+
+      // 코드 라인 [from..to] 의 peek 클래스 토글
+      function peekCodeLines(from, to, on) {
+        const codeEl = $('code');
+        for (let n = from; n <= to; n++) {
+          const row = codeEl.querySelector('[data-line="' + n + '"]');
+          if (row) row.classList.toggle('peek', on);
+        }
+      }
+
+      // 주석 영역의 lineref 중 line 번호 포함하는 것 peek 토글
+      function peekLinerefs(line, on) {
+        document.querySelectorAll('#explain code[data-lineref]').forEach((el) => {
+          const parts = el.dataset.lineref.split('-').map(Number);
+          const from = parts[0], to = parts[1];
+          if (line >= from && line <= to) el.classList.toggle('peek', on);
+        });
+      }
+
+      // 코드 영역 hover/click 위임
+      function setupCodeHover() {
+        const codeEl = $('code');
+        let lastLine = null;
+        codeEl.addEventListener('mouseover', (e) => {
+          const row = e.target.closest('.line');
+          if (!row) return;
+          const n = parseInt(row.dataset.line, 10);
+          if (n === lastLine) return;
+          if (lastLine !== null) peekLinerefs(lastLine, false);
+          peekLinerefs(n, true);
+          lastLine = n;
+        });
+        codeEl.addEventListener('mouseleave', () => {
+          if (lastLine !== null) peekLinerefs(lastLine, false);
+          lastLine = null;
+        });
+        // 클릭: 그 라인을 고정 강조 (다시 클릭하면 해제)
+        codeEl.addEventListener('click', (e) => {
+          const row = e.target.closest('.line');
+          if (!row) return;
+          const wasOn = row.classList.contains('highlighted');
+          codeEl.querySelectorAll('.line.highlighted').forEach(r => r.classList.remove('highlighted'));
+          if (!wasOn) row.classList.add('highlighted');
+        });
+      }
+
+      function autoHighlight(text) {
+        const codeEl = $('code');
+        codeEl.querySelectorAll('.auto-highlight').forEach(n => n.classList.remove('auto-highlight'));
+        const re = /L(\d+)(?:[-–](\d+))?/g;
+        const set = new Set();
+        let m;
+        while ((m = re.exec(text || '')) !== null) {
+          const from = parseInt(m[1], 10);
+          const to = m[2] ? parseInt(m[2], 10) : from;
+          for (let n = from; n <= to; n++) set.add(n);
+        }
+        set.forEach(n => {
+          const row = codeEl.querySelector('[data-line="' + n + '"]');
+          if (row) row.classList.add('auto-highlight');
+        });
+      }
+
+      // ─── 복사 ───
+      function copyToClipboard(text) {
+        const btn = $('copy-btn');
+        // 빈 텍스트 가드 (에러 카드일 때 등)
+        if (!text || text.trim() === '') {
+          const orig = btn.innerHTML;
+          btn.innerHTML = L().nothingToCopy;
+          setTimeout(() => { btn.innerHTML = orig; }, 1500);
+          return;
+        }
+        const flash = () => {
+          const orig = btn.innerHTML;
+          btn.innerHTML = L().copied; btn.classList.add('success');
+          setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('success'); }, 1200);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(flash).catch(() => fallbackCopy(text, flash));
+        } else { fallbackCopy(text, flash); }
+      }
+      function fallbackCopy(text, onDone) {
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+        if (onDone) onDone();
+      }
+
+      // ─── Splitter (코드 높이 + 코드/주석 너비) ───
+      function setupSplitters() {
+        const codeEl = $('code');
+        const rowEl = $('row-splitter');
+        const colEl = $('col-splitter');
+
+        // Row splitter (코드 영역 높이)
+        let rowDrag = null;
+        rowEl.addEventListener('mousedown', (e) => {
+          rowDrag = { startY: e.clientY, startH: codeEl.clientHeight };
+          rowEl.classList.add('dragging');
+          document.body.style.userSelect = 'none';
+          e.preventDefault();
+        });
+
+        // Col splitter (코드/주석 비율)
+        let colDrag = null;
+        colEl.addEventListener('mousedown', (e) => {
+          const firstLine = codeEl.querySelector('.line');
+          if (!firstLine) return;
+          const rect = firstLine.getBoundingClientRect();
+          const lnW = 32 + 12; // 라인번호 영역 + gap
+          const gridLeft = rect.left + lnW;
+          const gridWidth = rect.width - lnW - 14;  // 우측 14px 패딩
+          colDrag = { gridLeft, gridWidth };
+          colEl.classList.add('dragging');
+          document.body.style.userSelect = 'none';
+          e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+          if (rowDrag) {
+            const delta = e.clientY - rowDrag.startY;
+            const newH = Math.max(80, Math.min(800, rowDrag.startH + delta));
+            codeEl.style.setProperty('--code-h', newH + 'px');
+            colEl.style.setProperty('--code-h', newH + 'px');
+            updateColSplitterPos();
+          }
+          if (colDrag) {
+            const x = e.clientX - colDrag.gridLeft;
+            const ratio = Math.max(0.2, Math.min(0.8, x / colDrag.gridWidth));
+            codeEl.style.setProperty('--code-fr', ratio + 'fr');
+            codeEl.style.setProperty('--comment-fr', (1 - ratio) + 'fr');
+            requestAnimationFrame(updateColSplitterPos);
+          }
+        });
+
+        document.addEventListener('mouseup', () => {
+          if (rowDrag) rowEl.classList.remove('dragging');
+          if (colDrag) colEl.classList.remove('dragging');
+          rowDrag = colDrag = null;
+          document.body.style.userSelect = '';
+        });
+
+        // 코드 영역 스크롤(가로/세로) 시 col-splitter 위치 갱신
+        codeEl.addEventListener('scroll', () => {
+          if (codeEl.classList.contains('with-comments')) {
+            requestAnimationFrame(updateColSplitterPos);
+          }
+        });
+      }
+
+      // col-splitter 위치를 첫 라인의 .cm 시작점에 맞춤
+      function updateColSplitterPos() {
+        const codeEl = $('code');
+        const colEl = $('col-splitter');
+        if (!codeEl.classList.contains('with-comments')) return;
+        const firstLine = codeEl.querySelector('.line');
+        if (!firstLine) return;
+        const cm = firstLine.querySelector('.cm');
+        if (!cm) return;
+        const codeRect = codeEl.getBoundingClientRect();
+        const cmRect = cm.getBoundingClientRect();
+        const left = Math.max(0, cmRect.left - codeRect.left);
+        colEl.style.left = left + 'px';
+      }
+
+      function setupButtons() {
+        $('copy-btn').addEventListener('click', () => copyToClipboard(window.__lastExplain || ''));
+        $('retry-btn').addEventListener('click', () => sendMessage('retry'));
+        $('lang-btn').addEventListener('click', () => sendMessage('switch-lang'));
+        $('comments-btn').addEventListener('click', () => {
+          const block = $('code');
+          const btn = $('comments-btn');
+          if (!window.__hasComments) {
+            const orig = btn.innerHTML;
+            btn.innerHTML = L().reanalyzeFirst;
+            setTimeout(() => { btn.innerHTML = orig; }, 1500);
+            return;
+          }
+          const on = block.classList.toggle('with-comments');
+          $('col-splitter').classList.toggle('active', on);
+          btn.classList.toggle('success', on);
+          if (on) requestAnimationFrame(updateColSplitterPos);
+        });
+      }
+
+      // 라인 참조 (L\d+) 개수 카운트
+      function countLineRefs(text) {
+        const m = String(text || '').match(/L\d+(?:[-–]\d+)?/g);
+        return m ? m.length : 0;
+      }
+
+      // 라인 참조 0개일 때 상단에 안내 배지 prepend
+      function showNoRefsHintIfNeeded(explainText) {
+        const explainEl = $('explain');
+        // 기존 hint 제거
+        const old = explainEl.querySelector('.no-refs-hint');
+        if (old) old.remove();
+        if (countLineRefs(explainText) === 0) {
+          const hint = document.createElement('div');
+          hint.className = 'no-refs-hint';
+          hint.textContent = L().noRefs;
+          explainEl.insertBefore(hint, explainEl.firstChild);
+        }
+      }
+
+      // ─── 렌더러 ───
+      window.__codepopRender = function (data) {
+        data = data || {};
+        applyI18n(data.lang === 'en' ? 'en' : 'ko');
+        window.__lastExplain = data.explain || '';
+        renderCode(data.code || '');
+        $('loading').classList.add('hidden');
+        $('explain').classList.remove('hidden');
+        $('explain').innerHTML = safeMarkdown(data.explain || '');
+
+        const map = parseLineComments(data.explain || '');
+        applyLineComments(map);
+        hideLineSection();
+        showNoRefsHintIfNeeded(data.explain || '');
+
+        enhanceLineRefs();
+        autoHighlight(data.explain || '');
+
+        const sourceEl = $('source');
+        if (data.source === 'cache') {
+          sourceEl.innerHTML = '<span class="source-cache">💾 cache</span>';
+        } else {
+          sourceEl.innerHTML = '<span class="source-api">✦ ' + escapeHtml(data.source || 'Gemini') + '</span>';
+        }
+        $('elapsed').textContent = (data.elapsed || 0) + 'ms';
+
+        // 언어 토글: 현재 선택된 박스에 active 클래스
+        const cur = data.lang === 'en' ? 'en' : 'ko';
+        document.querySelectorAll('#lang-btn .lang-opt').forEach((el) => {
+          el.classList.toggle('active', el.dataset.lang === cur);
+        });
+      };
+
+      window.__codepopLoading = function (code, lang) {
+        if (lang) applyI18n(lang);
+        renderCode(code || '');
+        $('loading').classList.remove('hidden');
+        $('explain').classList.add('hidden');
+        $('source').innerHTML = '<span class="source-api">✦ Gemini</span>';
+        $('elapsed').textContent = '...';
+      };
+
+      // 에러 표시 (팝업 안에서, 닫지 않음)
+      window.__codepopError = function (data) {
+        data = data || {};
+        if (data.lang) applyI18n(data.lang);
+        const msg = String(data.error || (CUR_LANG === 'en' ? 'Error' : '오류'));
+        $('loading').classList.add('hidden');
+        $('explain').classList.remove('hidden');
+        $('explain').innerHTML =
+          '<div style="text-align:center; padding:28px 16px;">' +
+            '<div style="font-size:40px; margin-bottom:12px;">⚠️</div>' +
+            '<div style="color:#ff8c42; font-size:13.5px; font-weight:600; margin-bottom:10px; line-height:1.5; white-space:pre-wrap;">' + escapeHtml(msg) + '</div>' +
+            '<div style="color:#7a7a7d; font-size:11.5px; line-height:1.5;">' +
+              L().errHintHtml +
+            '</div>' +
+          '</div>';
+        $('source').innerHTML = '<span style="color:#ff8c42;">❌ error</span>';
+        $('elapsed').textContent = '';
+      };
+
+      // ─── 초기 ───
+      setupButtons();
+      setupSplitters();
+      setupCodeHover();
+      const data = window.__CODEPOP_DATA__ || { code: '', explain: '', source: '?', elapsed: 0, loading: false };
+      if (data.loading) window.__codepopLoading(data.code);
+      else window.__codepopRender(data);
+    })();
+  </script>
+  <!-- Tauri IPC 어댑터: webkit messageHandlers ↔ invoke, Rust 이벤트 ↔ __codepopRender/Loading/Error -->
+  <script src="ipc.js"></script>
+</body>
+</html>

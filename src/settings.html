@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>Codepop 설정</title>
+<link rel="stylesheet" href="vendor/pretendard/pretendardvariable.css" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100vh; background: #1e1e20; }
+  body {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: #e8e8ea; padding: 22px 24px; display: flex; flex-direction: column; gap: 16px;
+  }
+  .head { display: flex; align-items: center; gap: 10px; }
+  .badge { width: 28px; height: 28px; border-radius: 8px;
+    background: linear-gradient(135deg, #FF6363, #FF8C42);
+    display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .title { font-size: 16px; font-weight: 700; color: #fff; }
+  /* 상단 언어 토글 — 현재 언어와 무관하게 항상 눈에 띔 */
+  .langseg { margin-left: auto; display: inline-flex; gap: 2px;
+    background: #131315; border: 1px solid #2c2c2e; border-radius: 8px; padding: 2px; }
+  .seg { background: transparent; border: 0; color: #8a8a8d; font-family: inherit;
+    font-size: 12px; font-weight: 600; padding: 4px 11px; border-radius: 6px; cursor: pointer; }
+  .seg.active { background: #ff8c42; color: #1e1e20; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  label { font-size: 12px; color: #b0b0b3; font-weight: 600; }
+  .hint { font-size: 11px; color: #6a6a6d; line-height: 1.5; }
+  .hint a { color: #67c5ff; text-decoration: none; }
+  input, select {
+    background: #131315; color: #e8e8ea; border: 1px solid #2c2c2e;
+    border-radius: 8px; padding: 9px 11px; font-size: 13px; font-family: inherit; width: 100%;
+  }
+  input:focus, select:focus { outline: none; border-color: #ff8c42; }
+  input[type="text"].shortcut { font-family: 'SF Mono', Menlo, monospace; }
+  .footer { margin-top: auto; display: flex; align-items: center; justify-content: space-between; }
+  .status { font-size: 12px; color: #a3e635; opacity: 0; transition: opacity .2s; }
+  .status.show { opacity: 1; }
+  .status.err { color: #ff8c42; }
+  button.save {
+    background: #ff8c42; color: #1e1e20; border: 0; border-radius: 8px;
+    padding: 9px 20px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
+  }
+  button.save:active { transform: scale(0.97); }
+  .infobox {
+    background: #18181a; border: 1px solid #2c2c2e; border-radius: 8px;
+    padding: 11px 13px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .info-title { font-size: 11px; font-weight: 700; color: #ff8c42; letter-spacing: .04em; text-transform: uppercase; }
+  .info-line { font-size: 11.5px; color: #b0b0b3; line-height: 1.55; }
+  .info-line b { color: #e8e8ea; }
+  .info-line kbd {
+    background: #2c2c2e; padding: 1px 6px; border-radius: 4px;
+    font-family: 'SF Mono', Menlo, monospace; font-size: 10.5px; color: #fff;
+  }
+  .welcome {
+    background: rgba(255,140,66,0.1); border: 1px solid rgba(255,140,66,0.3);
+    border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #ffa55e; line-height: 1.5;
+    display: none;
+  }
+  .welcome.show { display: block; }
+</style>
+</head>
+<body>
+  <div class="head">
+    <div class="badge">✦</div>
+    <div class="title" id="t-title">Codepop 설정</div>
+    <div class="langseg" id="langseg">
+      <button type="button" class="seg active" data-lang="ko">한국어</button>
+      <button type="button" class="seg" data-lang="en">English</button>
+    </div>
+  </div>
+
+  <div class="welcome" id="welcome"></div>
+
+  <div class="field">
+    <label for="apiKey" id="t-apiKey">Gemini API 키</label>
+    <input type="password" id="apiKey" placeholder="AIza..." autocomplete="off" spellcheck="false" />
+    <div class="hint" id="t-apiKeyHint"></div>
+  </div>
+
+  <div class="field">
+    <label for="model" id="t-model">모델</label>
+    <select id="model">
+      <option value="gemini-2.5-flash-lite">2.5 Flash Lite</option>
+      <option value="gemini-2.5-flash">2.5 Flash</option>
+      <option value="gemini-2.5-pro">2.5 Pro</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="shortcut" id="t-shortcut">단축키</label>
+    <input type="text" class="shortcut" id="shortcut" placeholder="cmd+shift+e" spellcheck="false" />
+    <div class="hint" id="t-shortcutHint"></div>
+  </div>
+
+  <div class="infobox">
+    <div class="info-title" id="t-usageTitle">사용법</div>
+    <div class="info-line" id="t-usage1"></div>
+    <div class="info-line" id="t-usage2"></div>
+  </div>
+
+  <div class="footer">
+    <span class="status" id="status"></span>
+    <button class="save" id="save">저장</button>
+  </div>
+
+  <script>
+    (function () {
+      const T = window.__TAURI__;
+      const $ = (id) => document.getElementById(id);
+
+      const I18N = {
+        ko: {
+          title: 'Codepop 설정',
+          welcome: '👋 환영합니다! 시작하려면 아래에 <b>Gemini API 키</b>를 등록하세요. 무료입니다.',
+          apiKey: 'Gemini API 키',
+          apiKeyHint: '무료 발급: <a href="#" id="key-link">Google AI Studio</a> → Create API key (분당 15회 / 일 1500회, 비용 0원)',
+          model: '모델', shortcut: '단축키',
+          shortcutHint: '예: <code>cmd+shift+e</code> · 수식어(cmd/shift/alt/ctrl) + 키(a~z, 0~9)를 <code>+</code> 로 연결',
+          usageTitle: '사용법',
+          usage1: '어디서든 코드를 선택하고 %SC% → 커서 옆에 설명 팝업이 떠요.',
+          usage2: '⚠️ 처음엔 <b>손쉬운 사용</b> 권한이 필요합니다 (선택한 코드를 읽기 위함). 요청 창이 뜨면 허용하거나 <b>시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용</b> 에서 Codepop 을 켜주세요.',
+          save: '저장', saved: '✓ 저장됨 — 이제 코드 선택 후 ⌘⇧E!',
+          enterKey: 'API 키를 입력하세요', loadFail: '설정 로드 실패', saveFail: '저장 실패',
+        },
+        en: {
+          title: 'Codepop Settings',
+          welcome: '👋 Welcome! To get started, add your <b>Gemini API key</b> below. It’s free.',
+          apiKey: 'Gemini API key',
+          apiKeyHint: 'Get one free: <a href="#" id="key-link">Google AI Studio</a> → Create API key (15/min, 1500/day, $0)',
+          model: 'Model', shortcut: 'Shortcut',
+          shortcutHint: 'e.g. <code>cmd+shift+e</code> · modifiers (cmd/shift/alt/ctrl) + key (a–z, 0–9) joined with <code>+</code>',
+          usageTitle: 'How to use',
+          usage1: 'Select code anywhere and press %SC% → an explanation popup appears next to your cursor.',
+          usage2: '⚠️ First time needs <b>Accessibility</b> permission (to read your selected code). Allow it when prompted, or enable Codepop under <b>System Settings → Privacy & Security → Accessibility</b>.',
+          save: 'Save', saved: '✓ Saved — now select code and press ⌘⇧E!',
+          enterKey: 'Enter an API key', loadFail: 'Failed to load settings', saveFail: 'Save failed',
+        },
+      };
+      let LANG = 'ko';
+      const tr = () => I18N[LANG] || I18N.ko;
+
+      // "cmd+shift+e" → "⌘⇧E" (macOS 표기, ⌃⌥⇧⌘ 순)
+      function fmtShortcut(s) {
+        const sym = { cmd:'⌘', command:'⌘', super:'⌘', meta:'⌘', win:'⌘',
+                      shift:'⇧', alt:'⌥', option:'⌥', opt:'⌥', ctrl:'⌃', control:'⌃' };
+        const order = { '⌃':1, '⌥':2, '⇧':3, '⌘':4 };
+        const mods = []; let key = '';
+        String(s || '').split('+').forEach((p) => {
+          const t = p.trim().toLowerCase();
+          if (sym[t]) mods.push(sym[t]); else if (t) key = t.toUpperCase();
+        });
+        mods.sort((a, b) => (order[a] || 9) - (order[b] || 9));
+        return (mods.join('') + key) || '⌘⇧E';
+      }
+
+      // 안내 문구의 단축키 표기를 현재 입력값으로 갱신
+      function renderUsage1() {
+        const sc = ($('shortcut').value || '').trim() || 'cmd+shift+e';
+        $('t-usage1').innerHTML = tr().usage1.replace('%SC%', '<kbd>' + fmtShortcut(sc) + '</kbd>');
+      }
+
+      function bindKeyLink() {
+        const el = $('key-link');
+        if (!el) return;
+        el.addEventListener('click', (e) => {
+          e.preventDefault();
+          if (T && T.core) T.core.invoke('open_url', { url: 'https://aistudio.google.com/apikey' });
+        });
+      }
+
+      function applyLang(lang) {
+        LANG = (lang === 'en') ? 'en' : 'ko';
+        document.documentElement.lang = LANG;
+        // 토글 active 표시
+        document.querySelectorAll('#langseg .seg').forEach((b) =>
+          b.classList.toggle('active', b.dataset.lang === LANG));
+        const t = tr();
+        $('t-title').textContent = t.title;
+        $('welcome').innerHTML = t.welcome;
+        $('t-apiKey').textContent = t.apiKey;
+        $('t-apiKeyHint').innerHTML = t.apiKeyHint; bindKeyLink();
+        $('t-model').textContent = t.model;
+        $('t-shortcut').textContent = t.shortcut;
+        $('t-shortcutHint').innerHTML = t.shortcutHint;
+        $('t-usageTitle').textContent = t.usageTitle;
+        renderUsage1();
+        $('t-usage2').innerHTML = t.usage2;
+        $('save').textContent = t.save;
+      }
+
+      const status = (msg, isErr) => {
+        const el = $('status');
+        el.textContent = msg;
+        el.classList.toggle('err', !!isErr);
+        el.classList.add('show');
+        clearTimeout(el._t);
+        el._t = setTimeout(() => el.classList.remove('show'), 2500);
+      };
+
+      // 상단 토글 클릭 → 즉시 UI 전환
+      document.querySelectorAll('#langseg .seg').forEach((b) =>
+        b.addEventListener('click', () => applyLang(b.dataset.lang)));
+
+      // 단축키 입력 변경 시 안내 문구 즉시 갱신
+      $('shortcut').addEventListener('input', renderUsage1);
+
+      async function load() {
+        applyLang('ko');
+        if (!T || !T.core) return;
+        try {
+          const s = await T.core.invoke('load_settings');
+          $('apiKey').value = s.apiKey || '';
+          $('model').value = s.model || 'gemini-2.5-flash-lite';
+          $('shortcut').value = s.shortcut || 'cmd+shift+e';
+          applyLang(s.language || 'ko'); // 시스템 언어 반영된 값 (백엔드에서 추정)
+          if (!s.apiKey) { $('welcome').classList.add('show'); $('apiKey').focus(); }
+        } catch (e) { status(tr().loadFail, true); }
+      }
+
+      $('save').addEventListener('click', async () => {
+        if (!T || !T.core) return;
+        const apiKey = $('apiKey').value.trim();
+        const model = $('model').value;
+        const language = LANG;
+        const shortcut = $('shortcut').value.trim() || 'cmd+shift+e';
+        if (!apiKey) { status(tr().enterKey, true); return; }
+        try {
+          await T.core.invoke('save_settings', { apiKey, model, language, shortcut });
+          $('welcome').classList.remove('show');
+          status(tr().saved);
+        } catch (e) {
+          status(String(e || tr().saveFail), true);
+        }
+      });
+
+      load();
+    })();
+  </script>
+</body>
+</html>
